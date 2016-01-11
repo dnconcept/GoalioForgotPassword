@@ -89,9 +89,9 @@ class ModuleOptions extends AbstractOptions implements
     }
 
 	/**
-     * set user entity class name
+     * set password entity class name
      *
-     * @param string $userEntityClass
+     * @param string $passwordEntityClass
      * @return ModuleOptions
      */
     public function setPasswordEntityClass($passwordEntityClass)
@@ -101,7 +101,7 @@ class ModuleOptions extends AbstractOptions implements
     }
 
     /**
-     * get user entity class name
+     * get password entity class name
      *
      * @return string
      */

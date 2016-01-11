@@ -2,6 +2,7 @@
 
 namespace GoalioForgotPassword\Mapper;
 
+use InvalidArgumentException;
 use Zend\Stdlib\Hydrator\ClassMethods;
 use GoalioForgotPassword\Entity\Password as Entity;
 
@@ -12,16 +13,16 @@ class PasswordHydrator extends ClassMethods
      *
      * @param  object $object
      * @return array
-     * @throws Exception\InvalidArgumentException
+     * @throws InvalidArgumentException
      */
     public function extract($object)
     {
         if (!$object instanceof Entity) {
-            throw new \InvalidArgumentException('$object must be an instance of EmailVerification entity');
+            throw new InvalidArgumentException('$object must be an instance of EmailVerification entity');
         }
-        /* @var $object Entity*/
+        /* @var $object Entity */
         $data = parent::extract($object);
-        if ( $data['request_time'] instanceof \DateTime ) {
+        if ($data['request_time'] instanceof \DateTime) {
             $data['request_time'] = $data['request_time']->format('Y-m-d H:i:s');
         }
         return $data;
@@ -33,14 +34,14 @@ class PasswordHydrator extends ClassMethods
      * @param  array $data
      * @param  object $object
      * @return UserInterface
-     * @throws Exception\InvalidArgumentException
+     * @throws InvalidArgumentException
      */
     public function hydrate(array $data, $object)
     {
         if (!$object instanceof Entity) {
-            throw new \InvalidArgumentException('$object must be an instance of Password entity');
+            throw new InvalidArgumentException('$object must be an instance of Password entity');
         }
-        if ( ! $data['request_time'] instanceof \DateTime ) {
+        if (!$data['request_time'] instanceof \DateTime) {
             $data['request_time'] = new \DateTime($data['request_time']);
         }
         return parent::hydrate($data, $object);

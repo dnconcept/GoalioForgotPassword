@@ -9,11 +9,10 @@ return array(
         ),
     ),
     'controllers' => array(
-        'invokables' => array(
-            'goalioforgotpassword_forgot' => 'GoalioForgotPassword\Controller\ForgotController',
+        'factories' => array(
+            'goalioforgotpassword_forgot' => 'GoalioForgotPassword\Controller\ForgotControllerFactory',
         ),
     ),
-
     'translator' => array(
         'translation_file_patterns' => array(
             array(

@@ -3,12 +3,14 @@ namespace GoalioForgotPassword\Mapper\Service;
 
 use GoalioForgotPassword\Mapper\Password;
 use GoalioForgotPassword\Mapper\PasswordHydrator;
+use GoalioForgotPassword\Options\ModuleOptions;
 use Zend\ServiceManager\ServiceLocatorInterface;
 use Zend\ServiceManager\FactoryInterface;
 
 class PasswordFactory implements FactoryInterface {
 
     public function createService(ServiceLocatorInterface $serviceLocator) {
+        /** @var ModuleOptions $options */
         $options = $serviceLocator->get('goalioforgotpassword_module_options');
         $mapper = new Password();
         $mapper->setDbAdapter($serviceLocator->get('zfcuser_zend_db_adapter'));

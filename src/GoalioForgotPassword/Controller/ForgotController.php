@@ -2,109 +2,81 @@
 
 namespace GoalioForgotPassword\Controller;
 
+use GoalioForgotPassword\Options\ForgotOptionsInterface;
 use Zend\Form\Form;
 use Zend\Mvc\Controller\AbstractActionController;
-use Zend\Stdlib\ResponseInterface as Response;
-use Zend\Stdlib\Parameters;
 use Zend\View\Model\ViewModel;
 use GoalioForgotPassword\Service\Password as PasswordService;
 use GoalioForgotPassword\Options\ForgotControllerOptionsInterface;
+use ZfcUser\Service\User as ZfcUserService;
 
 class ForgotController extends AbstractActionController
 {
-    /**
-     * @var UserService
-     */
+    /** @var ZfcUserService */
     protected $userService;
 
-    /**
-     * @var PasswordService
-     */
+    /** @var PasswordService */
     protected $passwordService;
 
-    /**
-     * @var Form
-     */
+    /** @var Form */
     protected $forgotForm;
 
-    /**
-     * @var Form
-     */
+    /** @var Form */
     protected $resetForm;
 
     /**
-     * @todo Make this dynamic / translation-friendly
-     * @var string
+     * ForgotController constructor.
+     * @param ZfcUserService $userService
+     * @param PasswordService $passwordService
      */
-    protected $message = 'An e-mail with further instructions has been sent to you.';
-
-    /**
-     * @todo Make this dynamic / translation-friendly
-     * @var string
-     */
-    protected $failedMessage = 'The e-mail address is not valid.';
-
-    /**
-     * @var ForgotControllerOptionsInterface
-     */
-    protected $options;
-
-    /**
-     * @var PasswordOptionsInterface
-     */
-    protected $zfcUserOptions;
-
-    /**
-     * User page
-     */
-    public function indexAction()
+    public function __construct(ZfcUserService $userService, PasswordService $passwordService)
     {
-        if ($this->zfcUserAuthentication()->hasIdentity()) {
-            return $this->redirect()->toRoute('zfcuser');
-        } else {
-            return $this->redirect()->toRoute('zfcuser/forgotpassword');
-        }
+        $this->userService = $userService;
+        $this->passwordService = $passwordService;
     }
 
     public function forgotAction()
     {
-        $service = $this->getPasswordService();
-        $service->cleanExpiredForgotRequests();
+        if ($this->zfcUserAuthentication()->hasIdentity()) {
+            return $this->redirect()->toRoute('zfcuser');
+        }
+        $this->passwordService->cleanExpiredForgotRequests();
+        $redirectUrl = $this->url()->fromRoute('zfcuser/forgotpassword');
+        $prg = $this->prg($redirectUrl, true);
 
-        $request = $this->getRequest();
-        $form    = $this->getForgotForm();
-
-        if ( $this->getRequest()->isPost() )
-        {
-            $form->setData($this->getRequest()->getPost());
-            if ( $form->isValid() )
-            {
-                $userService = $this->getUserService();
-
-                //$email = $this->getRequest()->getPost()->get('email');
-                $email = $form->get('email')->getValue();
-                $user = $userService->getUserMapper()->findByEmail($email);
-
-                //only send request when email is found
-                if($user != null) {
-                    $service->sendProcessForgotRequest($user->getId(), $email);
-                }
-
-                $vm = new ViewModel(array('email' => $email));
-                $vm->setTemplate('goalio-forgot-password/forgot/sent');
-                return $vm;
-            } else {
-                $this->flashMessenger()->setNamespace('goalioforgotpassword-forgot-form')->addMessage($this->failedMessage);
-                return array(
-                    'forgotForm' => $form,
-                );
-            }
+        $form = $this->getForgotForm();
+        if ($prg instanceof \Zend\Http\PhpEnvironment\Response) {
+            // returned a response to redirect us
+            return $prg;
+        } elseif ($prg === false) {
+            // this wasn't a POST request, but there were no params in the flash messenger
+            // probably this is the first time the form was loaded
+            // Render the form
+            return array(
+                'forgotForm' => $form,
+            );
         }
 
-        // Render the form
-        return array(
-            'forgotForm' => $form,
-        );
+        $form->setData($prg);
+        if ($form->isValid()) {
+
+            $email = $form->get('email')->getValue();
+            $user = $this->userService->getUserMapper()->findByEmail($email);
+
+            //only send request when email is found
+            if ($user != null) {
+                $this->passwordService->sendProcessForgotRequest($user->getId(), $email);
+            }
+
+            $vm = new ViewModel(array('email' => $email));
+            $vm->setTemplate('goalio-forgot-password/forgot/sent');
+            return $vm;
+        } else {
+            return array(
+                'forgotForm' => $form,
+            );
+        }
+
     }
 
     public function resetAction()
@@ -113,71 +85,49 @@ class ForgotController extends AbstractActionController
             return $this->redirect()->toRoute('zfcuser');
         }
 
-        $service = $this->getPasswordService();
-        $service->cleanExpiredForgotRequests();
+        $this->passwordService->cleanExpiredForgotRequests();
 
-        $request = $this->getRequest();
-        $form    = $this->getResetForm();
+        $form = $this->getResetForm();
 
-        $userId    = $this->params()->fromRoute('userId', null);
-        $token     = $this->params()->fromRoute('token', null);
+        $userId = $this->params()->fromRoute('userId', null);
+        $token = $this->params()->fromRoute('token', null);
 
-        $passwordRequest = $service->getPasswordMapper()->findByUserIdRequestKey($userId, $token);
+        $passwordRequest = $this->passwordService->getPasswordMapper()->findByUserIdRequestKey($userId, $token);
 
         //no request for a new password found
-        if($passwordRequest === null || $passwordRequest == false) {
+        if ($passwordRequest === null || $passwordRequest == false) {
             return $this->redirect()->toRoute('zfcuser/forgotpassword');
         }
 
-        $userService = $this->getUserService();
-        $user = $userService->getUserMapper()->findById($userId);
+        $user = $this->userService->getUserMapper()->findById($userId);
 
-        if ( $this->getRequest()->isPost() )
-        {
+        if ($this->getRequest()->isPost()) {
             $form->setData($this->getRequest()->getPost());
-            if ( $form->isValid() && $user !== null )
-            {
-                $service->resetPassword($passwordRequest, $user, $form->getData());
+            if ($form->isValid() && $user !== null) {
+                $this->passwordService->resetPassword($passwordRequest, $user, $form->getData());
 
                 $vm = new ViewModel(array('email' => $user->getEmail()));
                 $vm->setTemplate('goalio-forgot-password/forgot/passwordchanged');
                 return $vm;
             }
         }
-
         // Render the form
-        return array(
+        return new ViewModel(array(
             'resetForm' => $form,
-            'userId'    => $userId,
-            'token'     => $token,
-            'email'     => $user->getEmail(),
-        );
+            'userId' => $userId,
+            'token' => $token,
+            'email' => $user->getEmail(),
+        ));
     }
 
     /**
-     * Getters/setters for DI stuff
+     * @param ZfcUserService $userService
+     * @return $this
      */
-
-    public function getUserService()
-    {
-        if (!$this->userService) {
-            $this->userService = $this->getServiceLocator()->get('zfcuser_user_service');
-        }
-        return $this->userService;
-    }
-
-    public function setUserService(UserService $userService)
+    public function setUserService(ZfcUserService $userService)
     {
         $this->userService = $userService;
         return $this;
-    }
-
-    public function getPasswordService()
-    {
-        if (!$this->passwordService) {
-            $this->passwordService = $this->getServiceLocator()->get('goalioforgotpassword_password_service');
-        }
-        return $this->passwordService;
     }
 
     public function setPasswordService(PasswordService $passwordService)
@@ -185,6 +135,10 @@ class ForgotController extends AbstractActionController
         $this->passwordService = $passwordService;
         return $this;
     }
+
+    /**
+     * Getters/setters for DI stuff
+     */
 
     public function getForgotForm()
     {
@@ -197,6 +151,7 @@ class ForgotController extends AbstractActionController
     public function setForgotForm(Form $forgotForm)
     {
         $this->forgotForm = $forgotForm;
+        return $this;
     }
 
     public function getResetForm()
@@ -210,38 +165,7 @@ class ForgotController extends AbstractActionController
     public function setResetForm(Form $resetForm)
     {
         $this->resetForm = $resetForm;
-    }
-
-    /**
-     * set options
-     *
-     * @param ForgotControllerOptionsInterface $options
-     * @return ForgotController
-     */
-    public function setOptions(ForgotControllerOptionsInterface $options)
-    {
-        $this->options = $options;
         return $this;
     }
 
-    /**
-     * get options
-     *
-     * @return ForgotControllerOptionsInterface
-     */
-    public function getOptions()
-    {
-        if (!$this->options instanceof ForgotControllerOptionsInterface) {
-            $this->setOptions($this->getServiceLocator()->get('goalioforgotpassword_module_options'));
-        }
-        return $this->options;
-    }
-
-    public function getZfcUserOptions()
-    {
-        if (!$this->zfcUserOptions instanceof PasswordOptionsInterface) {
-            $this->zfcUserOptions = $this->getServiceLocator()->get('zfcuser_module_options');
-        }
-        return $this->zfcUserOptions;
-    }
 }
